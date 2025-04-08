@@ -22,6 +22,19 @@ pub struct Data {
     data: [u8; 1024]
 }
 
+impl Data {
+    pub fn get_data(&self) -> &[u8; 1024] {
+        &self.data
+    }
+
+    pub fn packet_num(&self) -> u16 {
+        self.packet_number
+    }
+    pub fn is_last(&self) -> bool {
+        self.last_packet
+    }
+}
+
 #[derive(Debug)]
 pub struct Packet {
     file_id: u8,

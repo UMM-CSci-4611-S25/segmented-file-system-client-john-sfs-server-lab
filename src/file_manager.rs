@@ -55,11 +55,20 @@ pub struct FileGroup {
 
 impl FileGroup {
 
+    fn update_data_packet<'a>(&'a self, fd: &'a mut FileData, data: Data) -> &'a mut FileData {
+        fd.packets.insert(data.packet_num(), data.get_data().into());
+        if data.is_last() { 
+                fd.packet_count = Some(data.packet_num() as usize); 
+                fd
+        } else {
+            fd
+        }
+    }
+
     pub fn process_packet(&mut self, packet: Packet) {
         let f_id = packet.file_id();
         let header_packet: bool = packet.is_header();
         let pt: PacketType = packet.get_contents();
-
         if header_packet {
             //This extracts the header data from the PacketType() enum, 
             //since it's already known that the packet type will be header.
@@ -68,20 +77,22 @@ impl FileGroup {
                 PacketType::HeaderPacket(h) => Some(h),
                 PacketType::DataPacket(_) => None,
             }.unwrap();
-
             //Write the file name for the given file_id in the FileGroup
             let target_file = self.get_mut_file_from_key(f_id);
-            
-            
             let target_file = match target_file {
                 Some(fd) => {
                     fd.file_name = Some(OsString::from_vec(data.file_name.to_vec())); 
                     fd
                 },
-                None => &mut FileData { file_id: f_id, file_name: Some(OsString::from_vec(data.file_name.to_vec())), packet_count: None, packets: HashMap::new() }
+                None => &mut FileData { 
+                    file_id: f_id, 
+                    file_name: Some(OsString::from_vec(data.file_name.to_vec())), 
+                    packet_count: None, 
+                    packets: HashMap::new() 
+                }
             };
-
-            self.update_file_data(target_file.clone());
+            let write_data = target_file.clone();
+            self.update_file_data(write_data);
         }
         else {
             //This means we're processing a data packet.
@@ -89,6 +100,20 @@ impl FileGroup {
                 PacketType::HeaderPacket(_) => None,
                 PacketType::DataPacket(d) => Some(d),
             }.unwrap();
+
+            let target_file = self.get_mut_file_from_key(f_id);
+            let target_file: &mut FileData = match target_file {
+                Some(fd) => {
+                    //Update the existing data entry
+                   self.update_data_packet(fd, data)
+                },
+                None => &mut FileData {
+                    file_id: f_id,
+                    file_name: None,
+                    packet_count: None,
+                    packets: HashMap::new()
+                }
+            };
 
        }
     }
