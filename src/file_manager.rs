@@ -10,7 +10,6 @@ use crate::ClientError;
 #[derive(Debug)]
 #[derive(Clone)]
 struct FileData {
-    file_id: u8,
     file_name: Option<OsString>,
     packet_count: Option<usize>,
     packets: HashMap<u16, Vec<u8>>, 
@@ -18,10 +17,6 @@ struct FileData {
 
 
 impl FileData {
-    pub fn has_header(&self) -> bool {
-        self.file_name.is_some()
-    }
-
     pub fn has_all_packets(&self) -> bool {
         if self.packet_count.is_none() {
             false
@@ -46,6 +41,10 @@ impl FileData {
         } 
         Ok(())
     }
+
+    pub fn update_data_packet(&mut self, key: u16, contents: Vec<u8>) {
+        self.packets.insert(key, contents);
+    }
 }
 
 #[derive(Default)]
@@ -54,17 +53,6 @@ pub struct FileGroup {
 }
 
 impl FileGroup {
-
-    fn update_data_packet<'a>(&'a self, fd: &'a mut FileData, data: Data) -> &'a mut FileData {
-        fd.packets.insert(data.packet_num(), data.get_data().into());
-        if data.is_last() { 
-                fd.packet_count = Some(data.packet_num() as usize); 
-                fd
-        } else {
-            fd
-        }
-    }
-
     pub fn process_packet(&mut self, packet: Packet) {
         let f_id = packet.file_id();
         let header_packet: bool = packet.is_header();
@@ -77,22 +65,13 @@ impl FileGroup {
                 PacketType::HeaderPacket(h) => Some(h),
                 PacketType::DataPacket(_) => None,
             }.unwrap();
-            //Write the file name for the given file_id in the FileGroup
-            let target_file = self.get_mut_file_from_key(f_id);
-            let target_file = match target_file {
-                Some(fd) => {
-                    fd.file_name = Some(OsString::from_vec(data.file_name.to_vec())); 
-                    fd
-                },
-                None => &mut FileData { 
-                    file_id: f_id, 
+
+            let target_file = self.files.entry(f_id).or_insert(FileData { 
                     file_name: Some(OsString::from_vec(data.file_name.to_vec())), 
                     packet_count: None, 
                     packets: HashMap::new() 
-                }
-            };
-            let write_data = target_file.clone();
-            self.update_file_data(write_data);
+                });
+            target_file.file_name = Some(OsString::from_vec(data.file_name.to_vec()));
         }
         else {
             //This means we're processing a data packet.
@@ -100,30 +79,14 @@ impl FileGroup {
                 PacketType::HeaderPacket(_) => None,
                 PacketType::DataPacket(d) => Some(d),
             }.unwrap();
-
-            let target_file = self.get_mut_file_from_key(f_id);
-            let target_file: &mut FileData = match target_file {
-                Some(fd) => {
-                    //Update the existing data entry
-                   self.update_data_packet(fd, data)
-                },
-                None => &mut FileData {
-                    file_id: f_id,
-                    file_name: None,
-                    packet_count: None,
-                    packets: HashMap::new()
-                }
-            };
-
-       }
+           
+            let target_file = self.get_mut_file_from_key(f_id).expect("");
+            target_file.update_data_packet(data.packet_num(), data.get_data().into());
+        }
     }
 
     fn get_mut_file_from_key(&mut self, key: u8) -> Option<&mut FileData> {
         self.files.get_mut(&key)
-    }
-
-    fn update_file_data(&mut self, new_file_data: FileData) {
-        self.files.insert(new_file_data.file_id, new_file_data);
     }
 
     pub fn received_all_packets(&self) -> bool {
