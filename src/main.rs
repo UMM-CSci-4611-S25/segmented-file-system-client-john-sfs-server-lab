@@ -1,23 +1,23 @@
-fn main() {
-    println!("Hello, world!");
-}
+pub mod packet;
+pub mod file_manager;
 
+use crate::packet::{Packet,PacketError};
+use crate::file_manager::FileGroup;
 // Below is a version of the `main` function and some error types. This assumes
 // the existence of types like `FileManager`, `Packet`, and `PacketParseError`.
 // You can use this code as a starting point for the exercise, or you can
 // delete it and write your own code with the same function signature.
-
-/*
 
 use std::{
     io::{self, Write},
     net::UdpSocket,
 };
 
+
 #[derive(Debug)]
 pub enum ClientError {
     IoError(std::io::Error),
-    PacketParseError(PacketParseError),
+    PacketError(PacketError),
 }
 
 impl From<std::io::Error> for ClientError {
@@ -26,9 +26,9 @@ impl From<std::io::Error> for ClientError {
     }
 }
 
-impl From<PacketParseError> for ClientError {
-    fn from(e: PacketParseError) -> Self {
-        Self::PacketParseError(e)
+impl From<PacketError> for ClientError {
+    fn from(e: PacketError) -> Self {
+        Self::PacketError(e)
     }
 }
 
@@ -41,19 +41,21 @@ fn main() -> Result<(), ClientError> {
 
     let _ = sock.send(&buf[..1028]);
 
-    let mut file_manager = FileManager::default();
+    let mut file_group = FileGroup::default();
+    //let mut num_received_packets: usize = 0;
 
-    while !file_manager.received_all_packets() {
+    //Packet Counts: 553, 553 
+
+    while !file_group.received_all_packets() {
         let len = sock.recv(&mut buf)?;
         let packet: Packet = buf[..len].try_into()?;
-        print!(".");
+        //num_received_packets += 1;
+        //print!("{num_received_packets}\r");
         io::stdout().flush()?;
-        file_manager.process_packet(packet);
+        file_group.process_packet(packet);
     }
 
-    file_manager.write_all_files()?;
+    file_group.write_all_files()?;
 
     Ok(())
 }
-
- */
