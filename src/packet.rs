@@ -1,4 +1,8 @@
+use std::ffi::{OsStr, OsString};
+use std::str;
+
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum PacketType {
     HeaderPacket(Header),
     DataPacket(Data)
@@ -12,18 +16,18 @@ pub enum PacketError{
 
 #[derive(Debug)]
 pub struct Header {
-    pub file_name: [u8; 1024]
+    pub file_name: OsString
 }
 
 #[derive(Debug)]
 pub struct Data {
     packet_number: u16,
     last_packet: bool,
-    data: [u8; 1024]
+    data: Vec<u8>
 }
 
 impl Data {
-    pub fn get_data(&self) -> &[u8; 1024] {
+    pub fn get_data(&self) -> &Vec<u8> {
         &self.data
     }
 
@@ -81,7 +85,7 @@ impl TryFrom<&[u8]> for Packet {
        let is_header: bool = status_byte & 1 == 0;
        if is_header {
         let head: Header = Header {
-                file_name: value[2..].try_into().expect("Could not coerce into array.")
+                file_name: OsStr::new(str::from_utf8(&value[2..]).unwrap()).to_os_string()
             };
             Ok(Packet{file_id, packet_type: PacketType::HeaderPacket(head)})
         } else {

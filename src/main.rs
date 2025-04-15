@@ -42,11 +42,15 @@ fn main() -> Result<(), ClientError> {
     let _ = sock.send(&buf[..1028]);
 
     let mut file_group = FileGroup::default();
+    //let mut num_received_packets: usize = 0;
+
+    //Packet Counts: 553, 553 
 
     while !file_group.received_all_packets() {
         let len = sock.recv(&mut buf)?;
         let packet: Packet = buf[..len].try_into()?;
-        print!(".");
+        //num_received_packets += 1;
+        //print!("{num_received_packets}\r");
         io::stdout().flush()?;
         file_group.process_packet(packet);
     }

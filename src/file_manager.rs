@@ -2,8 +2,6 @@ use std::ffi::OsString;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
-use std::os::unix::ffi::OsStringExt;
-
 use crate::packet::{Header, Data, Packet, PacketType};
 use crate::ClientError;
 
@@ -18,16 +16,15 @@ struct FileData {
 
 impl FileData {
     pub fn has_all_packets(&self) -> bool {
+
         if self.packet_count.is_none() {
             false
         }
         else {
-            let mut i: usize = 0;
-            while i < self.packet_count.unwrap() {
+            for i in 0..self.packet_count.unwrap() {
                 if !self.packets.contains_key(&(i as u16)) {
                     return false;
                 }
-                i+=1; 
             }
             true
         }
@@ -35,15 +32,23 @@ impl FileData {
 
     pub fn write_file(&self) -> std::io::Result<()> {
         let mut file = File::create(self.file_name.as_ref().unwrap())?;
-        for i in 1..self.packet_count.unwrap() {
+        for i in 0..(self.packet_count.unwrap() + 1) {
             let out_byte = self.packets.get(&(i as u16)).unwrap();
             file.write_all(out_byte)?;
         } 
         Ok(())
     }
 
-    pub fn update_data_packet(&mut self, key: u16, contents: Vec<u8>) {
-        self.packets.insert(key, contents);
+    pub fn update_data_packet(&mut self, key: u16, contents: &[u8]) {
+        self.packets.insert(key, contents.to_vec());
+    }
+
+    pub fn get_contents(&self) -> &HashMap<u16, Vec<u8>> {
+        &self.packets
+    }
+
+    pub fn set_packet_count(&mut self, num: usize) {
+        self.packet_count = Some(num);    
     }
 }
 
@@ -67,11 +72,12 @@ impl FileGroup {
             }.unwrap();
 
             let target_file = self.files.entry(f_id).or_insert(FileData { 
-                    file_name: Some(OsString::from_vec(data.file_name.to_vec())), 
+                    file_name: None, 
                     packet_count: None, 
                     packets: HashMap::new() 
                 });
-            target_file.file_name = Some(OsString::from_vec(data.file_name.to_vec()));
+            target_file.file_name = Some(data.file_name);
+            let _content = target_file.get_contents().len();
         }
         else {
             //This means we're processing a data packet.
@@ -80,17 +86,20 @@ impl FileGroup {
                 PacketType::DataPacket(d) => Some(d),
             }.unwrap();
            
-            let target_file = self.get_mut_file_from_key(f_id).expect("");
-            target_file.update_data_packet(data.packet_num(), data.get_data().into());
+            let target_file = self.files.entry(f_id).or_insert(FileData { 
+                file_name: None, 
+                packet_count: None, 
+                packets: HashMap::new() 
+            }); 
+            target_file.update_data_packet(data.packet_num(), data.get_data());
+            if data.is_last(){
+                target_file.set_packet_count(data.packet_num() as usize);
+            }
         }
     }
 
-    fn get_mut_file_from_key(&mut self, key: u8) -> Option<&mut FileData> {
-        self.files.get_mut(&key)
-    }
-
     pub fn received_all_packets(&self) -> bool {
-        if self.files.len() < 3 {
+        if self.files.len() != 3 {
             return false;
         }
         for file in &self.files {
